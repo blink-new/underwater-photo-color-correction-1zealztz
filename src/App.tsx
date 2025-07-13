@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs'
 import { Label } from './components/ui/label'
 import { Separator } from './components/ui/separator'
 import { Badge } from './components/ui/badge'
+import { CurveEditor } from './components/CurveEditor'
 import { 
   Upload, 
   Download, 
@@ -171,10 +172,45 @@ function App() {
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
         const data = imageData.data
 
+        // Create curve lookup tables for performance
+        const createCurveLUT = (curve: number[]) => {
+          const lut = new Array(256)
+          for (let i = 0; i < 256; i++) {
+            const normalized = i / 255
+            const segmentIndex = Math.floor(normalized * 4)
+            const segmentProgress = (normalized * 4) - segmentIndex
+            
+            if (segmentIndex >= 4) {
+              lut[i] = Math.round((curve[4] / 100) * 255)
+            } else {
+              const startValue = curve[segmentIndex] / 100
+              const endValue = curve[segmentIndex + 1] / 100
+              const interpolated = startValue + (endValue - startValue) * segmentProgress
+              lut[i] = Math.round(interpolated * 255)
+            }
+          }
+          return lut
+        }
+
+        const rgbLUT = createCurveLUT(adjustments.rgbCurve)
+        const redLUT = createCurveLUT(adjustments.redCurve)
+        const greenLUT = createCurveLUT(adjustments.greenCurve)
+        const blueLUT = createCurveLUT(adjustments.blueCurve)
+
         for (let i = 0; i < data.length; i += 4) {
           let r = data[i]
           let g = data[i + 1]
           let b = data[i + 2]
+
+          // Apply curves first
+          r = Math.min(255, Math.max(0, rgbLUT[r]))
+          g = Math.min(255, Math.max(0, rgbLUT[g]))
+          b = Math.min(255, Math.max(0, rgbLUT[b]))
+
+          // Apply individual channel curves
+          r = Math.min(255, Math.max(0, redLUT[r]))
+          g = Math.min(255, Math.max(0, greenLUT[g]))
+          b = Math.min(255, Math.max(0, blueLUT[b]))
 
           // Temperature adjustment
           if (adjustments.temperature !== 0) {
@@ -585,11 +621,35 @@ function App() {
               </TabsContent>
 
               <TabsContent value="curves" className="space-y-6">
-                <div className="text-center text-muted-foreground">
-                  <TrendingUp className="h-8 w-8 mx-auto mb-2" />
-                  <p className="text-sm">RGB Curve Editor</p>
-                  <p className="text-xs">Coming in next update</p>
-                </div>
+                <CurveEditor
+                  curve={adjustments.rgbCurve}
+                  onChange={(curve) => setAdjustments(prev => ({ ...prev, rgbCurve: curve }))}
+                  color="rgb"
+                  label="Master Curve"
+                />
+                
+                <Separator />
+                
+                <CurveEditor
+                  curve={adjustments.redCurve}
+                  onChange={(curve) => setAdjustments(prev => ({ ...prev, redCurve: curve }))}
+                  color="red"
+                  label="Red Channel"
+                />
+                
+                <CurveEditor
+                  curve={adjustments.greenCurve}
+                  onChange={(curve) => setAdjustments(prev => ({ ...prev, greenCurve: curve }))}
+                  color="green"
+                  label="Green Channel"
+                />
+                
+                <CurveEditor
+                  curve={adjustments.blueCurve}
+                  onChange={(curve) => setAdjustments(prev => ({ ...prev, blueCurve: curve }))}
+                  color="blue"
+                  label="Blue Channel"
+                />
               </TabsContent>
 
               <TabsContent value="color" className="space-y-6">
